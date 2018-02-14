@@ -1,0 +1,141 @@
+ip netns add red1
+ip netns add green1
+
+
+ovs-vsctl add-br s1
+ovs-vsctl show
+
+ip link add red1-eth0 type veth peer name s1-eth1
+ip link add green1-eth0 type veth peer name s1-eth2
+ip link show
+
+
+ip link set red1-eth0 netns red1
+ip link set green1-eth0 netns green1
+ip netns exec red1 ip link show
+ip netns exec green1 ip link show
+
+ovs-vsctl add-port s1 s1-eth1
+ovs-vsctl add-port s1 s1-eth2
+ovs-vsctl show
+
+
+ip netns exec red1 ifconfig red1-eth0 10.0.0.1
+ip netns exec red1 ifconfig lo up
+ip netns exec green1 ifconfig green1-eth0 10.0.0.1
+ip netns exec green1 ifconfig lo up
+ifconfig s1-eth1 up
+ifconfig s1-eth2 up
+
+ip netns exec red1 ifconfig red1-eth0 up
+ip netns exec green1  ifconfig green1-eth0 up
+ip link show
+ip netns exec red1  ip link show
+ip netns exec green1  ip link show
+
+
+
+
+
+ip netns add red2
+ip netns add green2
+
+ovs-vsctl add-br s1
+ovs-vsctl show
+
+ip link add red2-eth0 type veth peer name s1-eth1
+ip link add green2-eth0 type veth peer name s1-eth2
+ip link show
+
+
+ip link set red2-eth0 netns red2
+ip link set green2-eth0 netns green2
+ip netns exec red2 ip link show
+ip netns exec green2 ip link show
+
+ovs-vsctl add-port s1 s1-eth1
+ovs-vsctl add-port s1 s1-eth2
+ovs-vsctl show
+
+
+ip netns exec red2 ifconfig red2-eth0 10.0.0.2
+ip netns exec red2 ifconfig lo up
+ip netns exec green2 ifconfig green2-eth0 10.0.0.2
+ip netns exec green2 ifconfig lo up
+ifconfig s1-eth1 up
+ifconfig s1-eth2 up
+
+
+
+ip netns exec red2 ifconfig red2-eth0 up
+ip netns exec green2  ifconfig green2-eth0 up
+ip link show
+ip netns exec red2  ip link show
+ip netns exec green2  ip link show
+
+
+
+
+ovs-vsctl add-port s1 vtep -- set interface vtep type=vxlan option:remote_ip=192.168.56.160 option:key=flow ofport_request=10  
+
+
+ovs-ofctl add-flows s1 flows.txt   
+
+
+
+
+Server1
+
+
+table=0,in_port=1,actions=set_field:100->tun_id,resubmit(,1)
+table=0,in_port=2,actions=set_field:200->tun_id,resubmit(,1)
+table=0,actions=resubmit(,1)
+
+table=1,tun_id=100,dl_dst=6e:ea:0c:30:a9:ab,actions=output:1
+table=1,tun_id=200,dl_dst=ce:60:fd:9d:c6:3f,actions=output:2
+table=1,tun_id=100,dl_dst=5a:06:0f:61:ac:e2,actions=output:10
+table=1,tun_id=200,dl_dst=ce:a5:e2:6a:d0:e4,actions=output:10
+table=1,tun_id=100,arp,nw_dst=10.0.0.1,actions=output:1
+table=1,tun_id=200,arp,nw_dst=10.0.0.1,actions=output:2
+table=1,tun_id=100,arp,nw_dst=10.0.0.2,actions=output:10
+table=1,tun_id=200,arp,nw_dst=10.0.0.2,actions=output:10
+table=1,priority=100,actions=drop
+
+
+
+                                                                        
+
+Server2
+
+
+table=0,in_port=1,actions=set_field:100->tun_id,resubmit(,1)
+table=0,in_port=2,actions=set_field:200->tun_id,resubmit(,1)
+table=0,actions=resubmit(,1)
+
+table=1,tun_id=100,dl_dst=5a:06:0f:61:ac:e2,actions=output:1
+table=1,tun_id=200,dl_dst=ce:a5:e2:6a:d0:e4,actions=output:2
+table=1,tun_id=100,dl_dst=6e:ea:0c:30:a9:ab,actions=output:10
+table=1,tun_id=200,dl_dst=ce:60:fd:9d:c6:3f,actions=output:10
+table=1,tun_id=100,arp,nw_dst=10.0.0.2,actions=output:1
+table=1,tun_id=200,arp,nw_dst=10.0.0.2,actions=output:2
+table=1,tun_id=100,arp,nw_dst=10.0.0.1,actions=output:10
+table=1,tun_id=200,arp,nw_dst=10.0.0.1,actions=output:10
+table=1,priority=100,actions=drop
+
+
+red1 ping 10.0.0.2
+
+green2 ip link set dev green2-eth0 down
+
+
+red1   9a:a9:7a:82:73:21
+green1 72:da:7d:92:28:66
+red2   2e:e7:83:5d:b3:4e
+green2 4a:c0:e5:6d:4e:9e
+
+
+
+
+ovs-ofctl show <bridge>
+ovs-ofctl dump-flows <bridge> <flow>
+
